@@ -62,6 +62,7 @@
 <span id="file-qr-result">None</span>
 
 <script type="module">
+    import Nimiq from "./web.esm.js";
     import QrScanner from "./qr-scanner.min.js";
     QrScanner.WORKER_PATH = './qr-scanner-worker.min.js';
 
@@ -81,6 +82,40 @@
         label.style.color = 'teal';
         clearTimeout(label.highlightTimeout);
         label.highlightTimeout = setTimeout(() => label.style.color = 'inherit', 100);
+    }
+
+    function stringToUtf8ByteArray(str) {
+        if (typeof TextEncoder !== 'undefined') {
+            const encoder = new TextEncoder(); // utf-8 is the default
+            return encoder.encode(str);
+        }
+
+        // Fallback for unsupported TextEncoder
+        const out = [];
+        let p = 0;
+        for (let i = 0; i < str.length; i++) {
+            let c = str.charCodeAt(i);
+            if (c < 128) {
+                out[p++] = c;
+            } else if (c < 2048) {
+                out[p++] = (c >> 6) | 192;
+                out[p++] = (c & 63) | 128;
+            } else if (
+                ((c & 0xFC00) == 0xD800) && (i + 1) < str.length
+            && ((str.charCodeAt(i + 1) & 0xFC00) == 0xDC00)) {
+                // Surrogate Pair
+                c = 0x10000 + ((c & 0x03FF) << 10) + (str.charCodeAt(++i) & 0x03FF);
+                out[p++] = (c >> 18) | 240;
+                out[p++] = ((c >> 12) & 63) | 128;
+                out[p++] = ((c >> 6) & 63) | 128;
+                out[p++] = (c & 63) | 128;
+            } else {
+                out[p++] = (c >> 12) | 224;
+                out[p++] = ((c >> 6) & 63) | 128;
+                out[p++] = (c & 63) | 128;
+            }
+        }
+        return new Uint8Array(out);
     }
 
     // ####### Web Cam Scanning #######
@@ -127,14 +162,34 @@
 
     // ####### File Scanning #######
 
-    fileSelector.addEventListener('change', event => {
+    fileSelector.addEventListener('change', async event => {
         const file = fileSelector.files[0];
         if (!file) {
             return;
         }
-        QrScanner.scanImage(file)
-            .then(result => setResult(fileQrResult, result))
-            .catch(e => setResult(fileQrResult, e || 'No QR code found.'));
+        try {
+            let decoded = await QrScanner.scanImage(file);
+
+            if (decoded.substr(0, 2) === '#2') {
+                decoded = decoded.substr(2);
+            }
+
+            const encryptedKey = Nimiq.BufferUtils.fromBase64(decoded);
+
+            const encryptionKey = stringToUtf8ByteArray("unsecure");
+
+            console.log("!!!1");
+
+            const secret = await Nimiq.Secret.fromEncrypted(encryptedKey, encryptionKey);
+
+            console.log("!!!2");
+
+            setResult(fileQrResult, secret);
+
+        } catch(e) {
+            console.log("!!!3");
+            setResult(fileQrResult, e || 'No QR code found.')
+        }
     });
 
 </script>

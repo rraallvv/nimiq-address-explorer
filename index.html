@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>QR Scanner Demo</title>
+    <script src="nimiq.js"></script>
+    <script src="qr-scanner.umd.min.js"></script>
 </head>
 <body>
 <style>
@@ -60,11 +62,15 @@
 <input type="file" id="file-selector">
 <b>Detected QR code: </b>
 <span id="file-qr-result">None</span>
+<hr>
+
+<h1>Address(es):</h1>
+<input type="password" id="pass" name="password" minlength="8">
 
 <script type="module">
-    import Nimiq from "./web.esm.js";
-    import QrScanner from "./qr-scanner.min.js";
     QrScanner.WORKER_PATH = './qr-scanner-worker.min.js';
+
+    Nimiq.load();
 
     const video = document.getElementById('qr-video');
     const camHasCamera = document.getElementById('cam-has-camera');
@@ -75,6 +81,7 @@
     const camQrResultTimestamp = document.getElementById('cam-qr-result-timestamp');
     const fileSelector = document.getElementById('file-selector');
     const fileQrResult = document.getElementById('file-qr-result');
+    const pass = document.getElementById('pass');
 
     function setResult(label, result) {
         label.textContent = result;
@@ -170,24 +177,37 @@
         try {
             let decoded = await QrScanner.scanImage(file);
 
+            let hasPin = false;
+
             if (decoded.substr(0, 2) === '#2') {
                 decoded = decoded.substr(2);
+                hasPin = true;
             }
 
             const encryptedKey = Nimiq.BufferUtils.fromBase64(decoded);
 
-            const encryptionKey = stringToUtf8ByteArray("unsecure");
+            const encryptionKey = stringToUtf8ByteArray(pass.value);
 
-            console.log("!!!1");
+            let key;
 
-            const secret = await Nimiq.Secret.fromEncrypted(encryptedKey, encryptionKey);
+            try {
+                const key = await Nimiq.KeyPair.fromEncrypted(encryptedKey, encryptionKey);
+            } catch(e) {
+                encryptedKey.reset();
+                const entropy = await Nimiq.Secret.fromEncrypted(encryptedKey, encryptionKey);
+                const masterKey = entropy.toExtendedPrivateKey();
+                const privateKey = masterKey.derivePath("m/44'/242'/0'/0'").privateKey;
+                key = Nimiq.KeyPair.derive(privateKey);
+            }
 
-            console.log("!!!2");
+            console.log("!!!2", key.publicKey);
 
-            setResult(fileQrResult, secret);
+            const wallet = new Nimiq.Wallet(key);
+
+            setResult(fileQrResult, wallet.address.toUserFriendlyAddress());
 
         } catch(e) {
-            console.log("!!!3");
+            console.log("!!!1");
             setResult(fileQrResult, e || 'No QR code found.')
         }
     });

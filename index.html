@@ -139,7 +139,7 @@ Total:
                 const first = Math.max(parseInt(firstInput.value) || 0, 0);
                 firstInput.value = first;
                 const total = Math.max(parseInt(totalInput.value) || 50, 1);
-                const last = total - first - 1;
+                const last = first + total - 1;
                 totalInput.value = total;
                 encryptedKey.reset();
                 const entropy = await Nimiq.Secret.fromEncrypted(encryptedKey, encryptionKey);

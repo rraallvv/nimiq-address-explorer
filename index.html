@@ -103,7 +103,18 @@ Total:
             return;
         }
         try {
-            let decoded = await QrScanner.scanImage(file);
+            const image = document.createElement('img');
+            image.src = URL.createObjectURL(file);
+            const qrPosition = {
+                x: 138,
+                y: 536,
+                size: 330 /*QR_SIZE*/,
+                padding: 12 /*QR_PADDING*/,
+                width: 330 /*QR_SIZE*/ + 2 * (12 /*QR_PADDING*/),
+                height: 330 /*QR_SIZE*/ + 2 * (12 /*QR_PADDING*/),
+            };
+
+            let decoded = await QrScanner.scanImage(image, qrPosition, null, null, true);
 
             let hasPin = false;
 
